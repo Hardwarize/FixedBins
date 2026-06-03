@@ -19,7 +19,7 @@ from torchvision import transforms
 def get_example_dataset(train=False, shuffle=False, device="cpu"):
 
     # filenames
-    index_file = "data/example_dataset/dataset.csv"
+    index_file = "/teamspace/studios/this_studio/uw_depth/data/example_dataset/dataset.csv"
     lines = csv.reader(open(index_file).read().splitlines())
     rgb_depth_priors_tuples = [i for i in lines]
 

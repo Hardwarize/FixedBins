@@ -16,22 +16,10 @@ def get_flsea_dataset(
     split="dataset_with_matched_features", train=False, shuffle=False, device="cpu"
 ):
 
-    # define csv files for input target pairs
     csv_files = [
-        f"/home/auv/FLSea/archive/canyons/flatiron/flatiron/imgs/{split}.csv",
-        f"/home/auv/FLSea/archive/canyons/horse_canyon/horse_canyon/imgs/{split}.csv",
-        f"/home/auv/FLSea/archive/canyons/tiny_canyon/tiny_canyon/imgs/{split}.csv",
-        f"/home/auv/FLSea/archive/canyons/u_canyon/u_canyon/imgs/{split}.csv",
-        f"/home/auv/FLSea/archive/red_sea/big_dice_loop/big_dice_loop/imgs/{split}.csv",
-        f"/home/auv/FLSea/archive/red_sea/coral_table_loop/coral_table_loop/imgs/{split}.csv",
-        f"/home/auv/FLSea/archive/red_sea/cross_pyramid_loop/cross_pyramid_loop/imgs/{split}.csv",
-        f"/home/auv/FLSea/archive/red_sea/dice_path/dice_path/imgs/{split}.csv",
-        f"/home/auv/FLSea/archive/red_sea/landward_path/landward_path/imgs/{split}.csv",
-        f"/home/auv/FLSea/archive/red_sea/pier_path/pier_path/imgs/{split}.csv",
-        f"/home/auv/FLSea/archive/red_sea/sub_pier/sub_pier/imgs/{split}.csv",
-        f"/home/auv/FLSea/archive/red_sea/northeast_path/northeast_path/imgs/{split}.csv",
+        "/teamspace/studios/this_studio/canyons_features_paths.csv",
+        "/teamspace/studios/this_studio/red_sea_features_paths.csv"
     ]
-
     # filenames
     rgb_depth_priors_tuples = []
     for csv_file in csv_files:

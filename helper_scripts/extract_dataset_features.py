@@ -15,7 +15,7 @@ from os import mkdir
 #     get_ycb_dataset,
 # )  # , get_usod10k_dataset
 from data.example_dataset.dataset import get_example_dataset
-# from data.flsea.dataset import get_flsea_dataset
+from data.flsea.dataset import get_flsea_dataset
 
 ##########################################
 ################# CONFIG #################
@@ -36,9 +36,9 @@ out_height = 240
 out_width = 320
 
 # get img paths
-# dataset = get_flsea_dataset(split="dataset_with_matched_features", shuffle=False)
+dataset = get_flsea_dataset(split="dataset_with_matched_features", shuffle=False)
 # dataset = get_ycb_dataset(split="val", shuffle=False)
-dataset = get_example_dataset(shuffle=False)
+# dataset = get_example_dataset(shuffle=False)
 path_tuples = dataset.path_tuples
 
 # output
