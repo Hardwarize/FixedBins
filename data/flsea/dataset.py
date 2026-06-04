@@ -20,6 +20,14 @@ def get_flsea_dataset(
         "/teamspace/studios/this_studio/canyons_features_paths.csv",
         "/teamspace/studios/this_studio/red_sea_features_paths.csv"
     ]
+    csv_files = [
+        "/teamspace/studios/this_studio/canyons_features_paths_resized.csv",
+        "/teamspace/studios/this_studio/red_sea_features_paths_resized.csv"
+    ]
+    csv_files = [
+        "/teamspace/studios/this_studio/canyons_features_paths_npy.csv",
+        "/teamspace/studios/this_studio/red_sea_features_paths_npy.csv"
+    ]
     # filenames
     rgb_depth_priors_tuples = []
     for csv_file in csv_files:

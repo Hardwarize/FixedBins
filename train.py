@@ -76,7 +76,7 @@ TRAIN_DATASET = get_flsea_dataset(
 VALIDATION_DATASET = get_example_dataset(train=False, shuffle=True, device=DEVICE)  # you should change this, this should not be the same as training
 
 # tensorboard output frequencies
-WRITE_TRAIN_IMG_EVERY_N_BATCHES = 500
+WRITE_TRAIN_IMG_EVERY_N_BATCHES = 4
 WRITE_VALIDATION_IMG_EVERY_N_BATCHES = 300
 
 ############################################################

@@ -64,17 +64,17 @@ class InputTargetDataset:
         t_start = time.perf_counter()
 
         # --- 1. get filenames ---
-        t0 = time.perf_counter()
+        ## TIME_FEATURE:t0 = time.perf_counter()
         input_fn = self.path_tuples[idx][0]
         target_fn = self.path_tuples[idx][1]
         depth_samples_fn = self.path_tuples[idx][2]
-        t1 = time.perf_counter()
-        print(f"[Time] [Item: {idx}] 1. Get filenames: {t1 - t0:.6f}s")
+        ## TIME_FEATURE:t1 = time.perf_counter()
+        ## TIME_FEATURE:print(f"[Time] [Item: {idx}] 1. Get filenames: {t1 - t0:.6f}s")
 
         # --- 2. read imgs ---
         t2 = time.perf_counter()
-        input_img = Image.open(input_fn).resize((640, 480))
-        target_img = Image.open(target_fn).resize((320, 240), resample=Image.NEAREST)
+        input_img = np.load(input_fn)#Image.open(input_fn)#.resize((640, 480))
+        target_img = np.load(target_fn)#Image.open(target_fn)#.resize((320, 240), resample=Image.NEAREST)
         t3 = time.perf_counter()
         print(f"[Time] [Item: {idx}] 2. Read & resize images: {t3 - t2:.6f}s")
 
@@ -86,15 +86,15 @@ class InputTargetDataset:
         print(f"[Time] [Item: {idx}] 3. Input & Target transforms: {t5 - t4:.6f}s")
 
         # --- 4. check if depth map has at least one valid value ---
-        t6 = time.perf_counter()
+        ## TIME_FEATURE:t6 = time.perf_counter()
         if not mask.any():
             print(
                 f"File {target_fn} has no valid depth values, trying other image as substitution ..."
             )
             random_idx = np.random.randint(0, len(self))
             return self[random_idx]  # recursion
-        t7 = time.perf_counter()
-        print(f"[Time] [Item: {idx}] 4. Mask validity check: {t7 - t6:.6f}s")
+        ## TIME_FEATURE:t7 = time.perf_counter()
+        ## TIME_FEATURE:print(f"[Time] [Item: {idx}] 4. Mask validity check: {t7 - t6:.6f}s")
 
         # --- 5. read sparse depth priors ---
         t8 = time.perf_counter()
@@ -103,13 +103,13 @@ class InputTargetDataset:
         print(f"[Time] [Item: {idx}] 5. Read sparse depth priors: {t9 - t8:.6f}s")
 
         # --- 6. check if features has at least one entry ---
-        t10 = time.perf_counter()
+        ## TIME_FEATURE:t10 = time.perf_counter()
         if depth_samples is None:
             print("Depth priors is None, trying other image as substitution ...")
             random_idx = np.random.randint(0, len(self))
             return self[random_idx]  # recursion
-        t11 = time.perf_counter()
-        print(f"[Time] [Item: {idx}] 6. Feature validity check: {t11 - t10:.6f}s")
+        ## TIME_FEATURE:t11 = time.perf_counter()
+        ## TIME_FEATURE: print(f"[Time] [Item: {idx}] 6. Feature validity check: {t11 - t10:.6f}s")
 
         # --- 7. get dense parametrization from sparse priors ---
         t12 = time.perf_counter()
@@ -122,13 +122,13 @@ class InputTargetDataset:
         print(f"[Time] [Item: {idx}] 7. Dense parametrization: {t13 - t12:.6f}s")
 
         # --- 8. apply target + prior transform ---
-        t14 = time.perf_counter()
+        ## TIME_FEATURE:t14 = time.perf_counter()
         if self.target_samples_transform is not None:
             target_img, parametrization = self.target_samples_transform(
                 [target_img, parametrization]
             )
-        t15 = time.perf_counter()
-        print(f"[Time] [Item: {idx}] 8. Target + prior transform: {t15 - t14:.6f}s")
+        ## TIME_FEATURE:t15 = time.perf_counter()
+        ## TIME_FEATURE:print(f"[Time] [Item: {idx}] 8. Target + prior transform: {t15 - t14:.6f}s")
 
         # --- 9. apply mutual transforms ---
         t16 = time.perf_counter()

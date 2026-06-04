@@ -2,7 +2,7 @@ import torch
 from torch.distributions.normal import Normal
 import time
 
-def get_distance_maps(height, width, idcs_height, idcs_width, device="cpu"):
+def get_distance_maps_old(height, width, idcs_height, idcs_width, device="cpu"):
     """Returns a SxHxW tensor that captures the euclidean pixel distance to S
     sample pixels with coordinates (h,w)."""
 
@@ -24,6 +24,25 @@ def get_distance_maps(height, width, idcs_height, idcs_width, device="cpu"):
 
         dist_maps = torch.cat((dist_maps, dist_map), dim=0)
 
+    return dist_maps
+
+
+def get_distance_maps(height, width, idcs_height, idcs_width, device="cpu"):
+    """Returns an SxHxW tensor that captures the euclidean pixel distance to S
+    sample pixels with coordinates (h,w)."""
+    
+    # Convert inputs to float tensors and shape them to (S, 1, 1) for broadcasting
+    h_pts = torch.as_tensor(idcs_height, dtype=torch.float32, device=device).view(-1, 1, 1)
+    w_pts = torch.as_tensor(idcs_width, dtype=torch.float32, device=device).view(-1, 1, 1)
+    
+    # Create 1D grids and shape them to (1, H, 1) and (1, 1, W)
+    h_grid = torch.arange(height, dtype=torch.float32, device=device).view(1, -1, 1)
+    w_grid = torch.arange(width, dtype=torch.float32, device=device).view(1, 1, -1)
+    
+    # Let PyTorch's C++ backend handle the expansion and calculations in parallel
+    # Shape of output will naturally broadcast to (S, height, width)
+    dist_maps = torch.sqrt((h_grid - h_pts)**2 + (w_grid - w_pts)**2)
+    
     return dist_maps
 
 
@@ -157,18 +176,18 @@ def get_depth_prior_from_features(
     batch_size = features.size(0)
 
     # --- 1. Tensor allocation ---
-    t0 = sync_time()
+    ## TIME_FEATURE:t0 = sync_time()
     prior_maps = torch.empty(batch_size, 1, height, width).to(features.device)
     distance_maps = torch.empty(batch_size, 1, height, width).to(features.device)
-    t1 = sync_time()
-    print(f"[Time] 1. Empty tensor allocation: {t1 - t0:.6f}s")
+    ## TIME_FEATURE:t1 = sync_time()
+    ## TIME_FEATURE:print(f"[Time] 1. Empty tensor allocation: {t1 - t0:.6f}s")
 
     # for every img, cannot vectorize because of masks with unequal length
     for i in range(batch_size):
         print(f"  --- Batch Item {i} ---")
 
         # --- 2. Masking & extraction ---
-        t2 = sync_time()
+        ## TIME_FEATURE:t2 = sync_time()
         mask = features[i, :, 2] > 0.0
 
         if not mask.any():
@@ -180,8 +199,8 @@ def get_depth_prior_from_features(
         idcs_height = features[i, mask, 0].round().long()
         idcs_width = features[i, mask, 1].round().long()
         depth_values = features[i, mask, 2]
-        t3 = sync_time()
-        print(f"  [Time] 2. Masking & array indexing: {t3 - t2:.6f}s")
+        ## TIME_FEATURE:t3 = sync_time()
+        ## TIME_FEATURE:print(f"  [Time] 2. Masking & array indexing: {t3 - t2:.6f}s")
 
         # --- 3. Distance Maps (Likely Bottleneck) ---
         t4 = sync_time()
@@ -192,18 +211,18 @@ def get_depth_prior_from_features(
         print(f"  [Time] 3. get_distance_maps: {t5 - t4:.6f}s")
 
         # --- 4. Min and Argmin ---
-        t6 = sync_time()
+        ## TIME_FEATURE:t6 = sync_time()
         dist_map_min, dist_argmin = torch.min(sample_dist_maps, dim=0, keepdim=True)
-        t7 = sync_time()
-        print(f"  [Time] 4. torch.min: {t7 - t6:.6f}s")
+        ## TIME_FEATURE:t7 = sync_time()
+        ## TIME_FEATURE:print(f"  [Time] 4. torch.min: {t7 - t6:.6f}s")
 
         # --- 5. Assignment ---
-        t8 = sync_time()
+        ## TIME_FEATURE:t8 = sync_time()
         prior_map = depth_values[dist_argmin]  
         prior_maps[i, ...] = prior_map
         distance_maps[i, ...] = dist_map_min
-        t9 = sync_time()
-        print(f"  [Time] 5. Prior/Dist assignment: {t9 - t8:.6f}s")
+        ## TIME_FEATURE:t9 = sync_time()
+        ## TIME_FEATURE:print(f"  [Time] 5. Prior/Dist assignment: {t9 - t8:.6f}s")
 
     # --- 6. Probability Model ---
     t10 = sync_time()
@@ -212,10 +231,10 @@ def get_depth_prior_from_features(
     print(f"[Time] 6. get_probability_maps: {t11 - t10:.6f}s")
 
     # --- 7. Final Concatenation ---
-    t12 = sync_time()
+    ## TIME_FEATURE:t12 = sync_time()
     parametrization = torch.cat((prior_maps, prior_probability_maps), dim=1) 
     t13 = sync_time()
-    print(f"[Time] 7. torch.cat: {t13 - t12:.6f}s")
+    ## TIME_FEATURE:print(f"[Time] 7. torch.cat: {t13 - t12:.6f}s")
 
     print(f"[Time] ---> TOTAL get_depth_prior time: {t13 - t_start:.6f}s\n")
 
