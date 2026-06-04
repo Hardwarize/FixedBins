@@ -1,6 +1,6 @@
 import torch
 from torch.distributions.normal import Normal
-
+import time
 
 def get_distance_maps(height, width, idcs_height, idcs_width, device="cpu"):
     """Returns a SxHxW tensor that captures the euclidean pixel distance to S
@@ -146,64 +146,78 @@ def get_depth_prior_from_features(
     height=240,
     width=320,
 ):
-    """Takes lists of pixel indices and their respective depth probes and
-    returns a dense depth prior parametrization.
+    # --- HELPER: ensures accurate PyTorch timing ---
+    def sync_time():
+        if features.is_cuda:
+            torch.cuda.synchronize()
+        return time.perf_counter()
 
-
-    - One image represents the nearest neighbor guess (Inpired by: https://arxiv.org/abs/1804.02771).
-    - The other image represents a probability map."""
+    t_start = sync_time()
 
     batch_size = features.size(0)
 
-    # depth prior maps
+    # --- 1. Tensor allocation ---
+    t0 = sync_time()
     prior_maps = torch.empty(batch_size, 1, height, width).to(features.device)
-
-    # euclidean distance maps
     distance_maps = torch.empty(batch_size, 1, height, width).to(features.device)
+    t1 = sync_time()
+    print(f"[Time] 1. Empty tensor allocation: {t1 - t0:.6f}s")
 
     # for every img, cannot vectorize because of masks with unequal length
-    # (different images may have different number of features)
     for i in range(batch_size):
+        print(f"  --- Batch Item {i} ---")
 
-        # use only entries with valid depth
+        # --- 2. Masking & extraction ---
+        t2 = sync_time()
         mask = features[i, :, 2] > 0.0
 
         if not mask.any():
-            max_dist = torch.sqrt(torch.pow(height, 2) + torch.pow(width, 2))
+            max_dist = torch.sqrt(torch.pow(torch.tensor(height), 2) + torch.pow(torch.tensor(width), 2))
             prior_maps[i, ...] = 0.0
             distance_maps[i, ...] = max_dist
-            print(
-                "WARNING: Img has no valid features (depth > 0.0), using "
-                + f"placeholder as parametrization (mosaic=0.0, dist={max_dist})."
-            )
             continue
 
-        # get list of indices and depth values
         idcs_height = features[i, mask, 0].round().long()
         idcs_width = features[i, mask, 1].round().long()
         depth_values = features[i, mask, 2]
+        t3 = sync_time()
+        print(f"  [Time] 2. Masking & array indexing: {t3 - t2:.6f}s")
 
-        # get n_samples x height x width dist maps
-        # (needs quite a bit of memory but is faster than iterating over every pixel)
+        # --- 3. Distance Maps (Likely Bottleneck) ---
+        t4 = sync_time()
         sample_dist_maps = get_distance_maps(
             height, width, idcs_height, idcs_width, device=features.device
         )
-        # find min and argmin
+        t5 = sync_time()
+        print(f"  [Time] 3. get_distance_maps: {t5 - t4:.6f}s")
+
+        # --- 4. Min and Argmin ---
+        t6 = sync_time()
         dist_map_min, dist_argmin = torch.min(sample_dist_maps, dim=0, keepdim=True)
+        t7 = sync_time()
+        print(f"  [Time] 4. torch.min: {t7 - t6:.6f}s")
 
-        # nearest neighbor prior map
-        prior_map = depth_values[dist_argmin]  # 1xHxW
-
-        # concat
+        # --- 5. Assignment ---
+        t8 = sync_time()
+        prior_map = depth_values[dist_argmin]  
         prior_maps[i, ...] = prior_map
         distance_maps[i, ...] = dist_map_min
+        t9 = sync_time()
+        print(f"  [Time] 5. Prior/Dist assignment: {t9 - t8:.6f}s")
 
-    # probability model:
-    # convert pixel distance to probability
+    # --- 6. Probability Model ---
+    t10 = sync_time()
     prior_probability_maps = get_probability_maps(distance_maps)
+    t11 = sync_time()
+    print(f"[Time] 6. get_probability_maps: {t11 - t10:.6f}s")
 
-    # parametrization
-    parametrization = torch.cat((prior_maps, prior_probability_maps), dim=1)  # Nx2xHxW
+    # --- 7. Final Concatenation ---
+    t12 = sync_time()
+    parametrization = torch.cat((prior_maps, prior_probability_maps), dim=1) 
+    t13 = sync_time()
+    print(f"[Time] 7. torch.cat: {t13 - t12:.6f}s")
+
+    print(f"[Time] ---> TOTAL get_depth_prior time: {t13 - t_start:.6f}s\n")
 
     return parametrization
 
