@@ -196,7 +196,7 @@ def train_epoch(
         prior = data[3].to(DEVICE)  # precomputed features and depth values
 
         # nullprior, for training without any priors
-        # prior[:, :, :, :] = 0.0
+        prior[:, :, :, :] = 0.0
 
 
         model_inference_start_time = time.time()
