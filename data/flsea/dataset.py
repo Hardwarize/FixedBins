@@ -30,7 +30,7 @@ def get_flsea_dataset(
     for csv_file in csv_files:
         try:
             lines = csv.reader(open(csv_file).read().splitlines())
-            rgb_depth_priors_tuples += [i for i in lines]
+            rgb_depth_priors_tuples += [i.replace('/teamspace/studios/this_studio/', '/kaggle/input/datasets/guillermolvarez/optimized-flsea/') for i in lines]
         except FileNotFoundError:
             print(f"{csv_file} not found, skipping...")
 
