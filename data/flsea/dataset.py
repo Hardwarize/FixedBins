@@ -1,4 +1,4 @@
-from random import random
+import random
 
 from depth_estimation.utils.data import (
     InputTargetDataset,
