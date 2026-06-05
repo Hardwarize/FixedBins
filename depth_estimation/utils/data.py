@@ -72,18 +72,18 @@ class InputTargetDataset:
         ## TIME_FEATURE:print(f"[Time] [Item: {idx}] 1. Get filenames: {t1 - t0:.6f}s")
 
         # --- 2. read imgs ---
-        t2 = time.perf_counter()
+        ## TIME_FEATURE:t2 = time.perf_counter()
         input_img = np.load(input_fn)#Image.open(input_fn)#.resize((640, 480))
         target_img = np.load(target_fn)#Image.open(target_fn)#.resize((320, 240), resample=Image.NEAREST)
-        t3 = time.perf_counter()
-        print(f"[Time] [Item: {idx}] 2. Read & resize images: {t3 - t2:.6f}s")
+        ## TIME_FEATURE:t3 = time.perf_counter()
+        ## TIME_FEATURE:print(f"[Time] [Item: {idx}] 2. Read & resize images: {t3 - t2:.6f}s")
 
         # --- 3. apply input/target transforms ---
-        t4 = time.perf_counter()
+        ## TIME_FEATURE:t4 = time.perf_counter()
         input_img = self.input_transform(input_img)
         target_img, mask = self.target_transform(target_img)
-        t5 = time.perf_counter()
-        print(f"[Time] [Item: {idx}] 3. Input & Target transforms: {t5 - t4:.6f}s")
+        ## TIME_FEATURE:t5 = time.perf_counter()
+        ## TIME_FEATURE:print(f"[Time] [Item: {idx}] 3. Input & Target transforms: {t5 - t4:.6f}s")
 
         # --- 4. check if depth map has at least one valid value ---
         ## TIME_FEATURE:t6 = time.perf_counter()
@@ -97,10 +97,10 @@ class InputTargetDataset:
         ## TIME_FEATURE:print(f"[Time] [Item: {idx}] 4. Mask validity check: {t7 - t6:.6f}s")
 
         # --- 5. read sparse depth priors ---
-        t8 = time.perf_counter()
+        ## TIME_FEATURE:t8 = time.perf_counter()
         depth_samples = read_features(depth_samples_fn, self.max_priors, device=target_img.device)
-        t9 = time.perf_counter()
-        print(f"[Time] [Item: {idx}] 5. Read sparse depth priors: {t9 - t8:.6f}s")
+        ## TIME_FEATURE:t9 = time.perf_counter()
+        ## TIME_FEATURE:print(f"[Time] [Item: {idx}] 5. Read sparse depth priors: {t9 - t8:.6f}s")
 
         # --- 6. check if features has at least one entry ---
         ## TIME_FEATURE:t10 = time.perf_counter()
@@ -112,14 +112,14 @@ class InputTargetDataset:
         ## TIME_FEATURE: print(f"[Time] [Item: {idx}] 6. Feature validity check: {t11 - t10:.6f}s")
 
         # --- 7. get dense parametrization from sparse priors ---
-        t12 = time.perf_counter()
+        ## TIME_FEATURE:t12 = time.perf_counter()
         parametrization = get_depth_prior_from_features(
             features=depth_samples.unsqueeze(0),  # add batch dimension
             height=240,
             width=320,
         ).squeeze(0)
-        t13 = time.perf_counter()
-        print(f"[Time] [Item: {idx}] 7. Dense parametrization: {t13 - t12:.6f}s")
+        ## TIME_FEATURE:t13 = time.perf_counter()
+        ## TIME_FEATURE:print(f"[Time] [Item: {idx}] 7. Dense parametrization: {t13 - t12:.6f}s")
 
         # --- 8. apply target + prior transform ---
         ## TIME_FEATURE:t14 = time.perf_counter()
@@ -131,14 +131,14 @@ class InputTargetDataset:
         ## TIME_FEATURE:print(f"[Time] [Item: {idx}] 8. Target + prior transform: {t15 - t14:.6f}s")
 
         # --- 9. apply mutual transforms ---
-        t16 = time.perf_counter()
+        ## TIME_FEATURE:t16 = time.perf_counter()
         tensor_list = [input_img, target_img, mask, parametrization]
         if self.all_transform is not None:
             tensor_list = self.all_transform(tensor_list)
-        t17 = time.perf_counter()
-        print(f"[Time] [Item: {idx}] 9. Mutual transforms: {t17 - t16:.6f}s")
+        ## TIME_FEATURE:t17 = time.perf_counter()
+        ## TIME_FEATURE:print(f"[Time] [Item: {idx}] 9. Mutual transforms: {t17 - t16:.6f}s")
         
-        print(f"[Time] [Item: {idx}] ---> TOTAL __getitem__ time: {t17 - t_start:.6f}s\n")
+        ## TIME_FEATURE:print(f"[Time] [Item: {idx}] ---> TOTAL __getitem__ time: {t17 - t_start:.6f}s\n")
 
         return tensor_list
 

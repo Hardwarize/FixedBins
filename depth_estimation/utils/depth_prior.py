@@ -225,18 +225,18 @@ def get_depth_prior_from_features(
         ## TIME_FEATURE:print(f"  [Time] 5. Prior/Dist assignment: {t9 - t8:.6f}s")
 
     # --- 6. Probability Model ---
-    t10 = sync_time()
+    ## TIME_FEATURE:t10 = sync_time()
     prior_probability_maps = get_probability_maps(distance_maps)
-    t11 = sync_time()
-    print(f"[Time] 6. get_probability_maps: {t11 - t10:.6f}s")
+    ## TIME_FEATURE:t11 = sync_time()
+    ## TIME_FEATURE:print(f"[Time] 6. get_probability_maps: {t11 - t10:.6f}s")
 
     # --- 7. Final Concatenation ---
     ## TIME_FEATURE:t12 = sync_time()
     parametrization = torch.cat((prior_maps, prior_probability_maps), dim=1) 
-    t13 = sync_time()
+    ## TIME_FEATURE:t13 = sync_time()
     ## TIME_FEATURE:print(f"[Time] 7. torch.cat: {t13 - t12:.6f}s")
 
-    print(f"[Time] ---> TOTAL get_depth_prior time: {t13 - t_start:.6f}s\n")
+    ## TIME_FEATURE:print(f"[Time] ---> TOTAL get_depth_prior time: {t13 - t_start:.6f}s\n")
 
     return parametrization
 

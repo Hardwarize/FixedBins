@@ -15,10 +15,16 @@ import csv
 def get_flsea_dataset(
     split="dataset_with_matched_features", train=False, shuffle=False, device="cpu"
 ):
-    csv_files = [
-        "./canyons_features_paths_npy.csv",
-        "./red_sea_features_paths_npy.csv"
-    ]
+
+    if train:
+        csv_files = [
+            "./red_sea_features_paths_npy.csv"
+        ]
+    
+    else:
+        csv_files = [
+            "./canyons_features_paths_npy.csv"
+        ]
     # filenames
     rgb_depth_priors_tuples = []
     for csv_file in csv_files:
