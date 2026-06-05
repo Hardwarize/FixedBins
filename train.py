@@ -317,7 +317,7 @@ def validate(
         prior = data[3].to(DEVICE)  # precomputed features and depth values
 
         # nullprior
-        # prior[:, :, :, :] = 0.0
+        prior[:, :, :, :] = 0.0
 
         # prediction
         pred, bin_edges = model(X, prior)
