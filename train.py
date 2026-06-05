@@ -25,7 +25,7 @@ from data.example_dataset.dataset import get_example_dataset
 ##############################################################
 
 # training parameters
-BATCH_SIZE = 6
+BATCH_SIZE = 12
 LEARNING_RATE = 0.0001
 LEARNING_RATE_DECAY = 0.90
 EPOCHS = 25
@@ -73,10 +73,15 @@ TRAIN_DATASET = get_flsea_dataset(
 # )
 
 #TRAIN_DATASET = get_example_dataset(train=True, shuffle=True, device=DEVICE)
-VALIDATION_DATASET = get_example_dataset(train=False, shuffle=True, device=DEVICE)  # you should change this, this should not be the same as training
+VALIDATION_DATASET = get_flsea_dataset(
+     split="dataset_with_matched_features",
+     train=False,
+     shuffle=True,
+     device=DEVICE,
+)
 
 # tensorboard output frequencies
-WRITE_TRAIN_IMG_EVERY_N_BATCHES = 4
+WRITE_TRAIN_IMG_EVERY_N_BATCHES = 100
 WRITE_VALIDATION_IMG_EVERY_N_BATCHES = 300
 
 ############################################################
@@ -267,10 +272,10 @@ def train_epoch(
 
                 # write to tensorboard
                 summary_writer.add_image(
-                    f"train_rgb_target_pred_error/{batch_id}", grids[0], epoch
+                    f"train_rgb_target_pred_error", grids[0], batch_id#epoch
                 )
                 summary_writer.add_image(
-                    f"train_target_parametrization/{batch_id}", grids[1], epoch
+                    f"train_target_parametrization", grids[1], batch_id#epoch
                 )
 
         if batch_id % 50 == 0:
