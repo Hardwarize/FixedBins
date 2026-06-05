@@ -1,3 +1,5 @@
+from random import random
+
 from depth_estimation.utils.data import (
     InputTargetDataset,
     IntPILToTensor,
@@ -12,7 +14,7 @@ from torchvision import transforms
 import csv
 
 
-def get_flsea_dataset(
+def get_flsea_dataset_old(
     split="dataset_with_matched_features", train=False, shuffle=False, device="cpu"
 ):
 
@@ -77,6 +79,37 @@ def get_flsea_dataset(
         target_samples_transform=target_samples_transform,
         max_priors=200,
         shuffle=shuffle,
+    )
+
+    return dataset
+
+
+def get_flsea_dataset(
+    split="dataset_with_matched_features", train=False, shuffle=False, device="cpu"
+):
+    if train:
+        csv_files = ["./red_sea_features_paths_npy.csv"]
+    else:
+        csv_files = ["./canyons_features_paths_npy.csv"]
+        
+    rgb_depth_priors_tuples = []
+    for csv_file in csv_files:
+        try:
+            lines = csv.reader(open(csv_file).read().splitlines())
+            rgb_depth_priors_tuples += [[j.replace('/teamspace/studios/this_studio/', '/kaggle/input/datasets/guillermolvarez/optimized-flsea/') for j in i] for i in lines]
+        except FileNotFoundError:
+            print(f"{csv_file} not found, skipping...")
+
+    # Barajar antes de instanciar si se desea
+    if shuffle:
+        random.shuffle(rgb_depth_priors_tuples)
+
+    # Instanciamos el dataset optimizado
+    dataset = InputTargetDataset(
+        rgb_depth_priors_tuples=rgb_depth_priors_tuples,
+        train=train,
+        max_priors=200,
+        device=device
     )
 
     return dataset

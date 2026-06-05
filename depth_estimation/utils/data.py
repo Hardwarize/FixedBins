@@ -12,7 +12,7 @@ from os.path import exists
 from .depth_prior import get_depth_prior_from_features
 
 
-class InputTargetDataset:
+class InputTargetDataset_old:
     """Parameters:
     - rgb_depth_priors_tuples: List of filepath tuples of form (rgb, depth, sparse priors)
     - input_transform: Transform to apply to the input RGB image, returns torch Tensor
@@ -141,6 +141,122 @@ class InputTargetDataset:
         ## TIME_FEATURE:print(f"[Time] [Item: {idx}] ---> TOTAL __getitem__ time: {t17 - t_start:.6f}s\n")
 
         return tensor_list
+
+
+import time
+import torch
+import numpy as np
+import random
+from tqdm import tqdm # Para ver el progreso de carga en RAM
+
+class InputTargetDataset:
+    def __init__(
+        self,
+        rgb_depth_priors_tuples,
+        train=False, # Añadimos este flag para saber si aplicar Jitter/Flips
+        max_priors=200,
+        device="cpu", # Preferiblemente "cpu" para la RAM, no satures la VRAM
+    ) -> None:
+
+        self.train = train
+        self.device = device
+        self.max_priors = max_priors
+        self.cache = []
+
+        print(f"Cargando dataset en RAM y pre-computando transformaciones estáticas...")
+        
+        # Iteramos con barra de progreso
+        for input_fn, target_fn, depth_samples_fn in tqdm(rgb_depth_priors_tuples, desc="Cacheando en RAM"):
+            
+            # --- 1. Leer imágenes ---
+            input_img = np.load(input_fn)
+            target_img = np.load(target_fn)
+
+            # --- 2. Pre-procesar Target y Máscara (Equivalente a FloatPILToTensor + ReplaceInvalid) ---
+            if target_img.ndim == 2:
+                target_img = target_img[np.newaxis, ...]
+            target_tensor = torch.from_numpy(target_img).float()
+            
+            mask = target_tensor.gt(0.0)
+            
+            # FILTRADO: Si no hay valores válidos, ignoramos este sample (evita recursividad en __getitem__)
+            if not mask.any():
+                continue
+                
+            # ReplaceInvalid(value="max")
+            max_val = target_tensor[mask].max()
+            target_tensor[~mask] = max_val
+
+            # --- 3. Leer y pre-calcular Priors (Ahorro masivo de tiempo) ---
+            depth_samples = read_features(depth_samples_fn, self.max_priors, device='cpu')
+            
+            # FILTRADO: Si no hay features, lo saltamos
+            if depth_samples is None:
+                continue
+
+            parametrization = get_depth_prior_from_features(
+                features=depth_samples.unsqueeze(0),
+                height=240, # Asumo que estos valores son fijos según tu código original
+                width=320,
+            ).squeeze(0)
+
+            # --- 4. Pre-procesar Input (Equivalente parcial a IntPILToTensor) ---
+            # OJO: Lo guardamos como uint8 en RAM para no saturar los 30GB.
+            if input_img.ndim == 3:
+                input_img = input_img.transpose((2, 0, 1))
+            elif input_img.ndim == 2:
+                input_img = input_img[np.newaxis, ...]
+            input_tensor_uint8 = torch.from_numpy(input_img).to(torch.uint8)
+
+            # --- 5. Guardar en RAM ---
+            # Usa float16 para el target/parametrization si aún así te quedas sin RAM
+            self.cache.append({
+                'input': input_tensor_uint8,        # uint8
+                'target': target_tensor,            # float32 
+                'mask': mask,                       # bool
+                'parametrization': parametrization  # float32
+            })
+
+        print(f"Dataset cargado. Muestras válidas retenidas: {len(self.cache)}")
+
+        # --- Transformaciones Aleatorias (Sólo se inicializan, se usan en __getitem__) ---
+        if self.train:
+            import torchvision.transforms as T
+            self.color_jitter = T.ColorJitter(brightness=0.1, hue=0.05)
+            self.mutual_flip = MutualRandomHorizontalFlip()
+            self.mutual_factor = MutualRandomFactor(factor_range=(0.8, 1.2))
+
+    def __len__(self):
+        return len(self.cache)
+
+    def __getitem__(self, idx):
+        # 1. Recuperar directamente de la RAM
+        data = self.cache[idx]
+        
+        # 2. Mover a dispositivo (si aplica) y finalizar conversión de input
+        # Aquí es donde dividimos por 255.0 para pasar de uint8 a float [0,1]
+        input_img = data['input'].to(self.device).float().div(255.0)
+        target_img = data['target'].to(self.device)
+        mask = data['mask'].to(self.device)
+        parametrization = data['parametrization'].to(self.device)
+
+        # 3. Aplicar transformaciones aleatorias SI es entrenamiento
+        if self.train:
+            # Jitter solo al input
+            input_img = self.color_jitter(input_img)
+
+            # Target + prior transform
+            target_img, parametrization = self.mutual_factor([target_img, parametrization])
+
+            # Mutual flips (afecta a todos)
+            tensor_list = [input_img, target_img, mask, parametrization]
+            tensor_list = self.mutual_flip(tensor_list)
+            return tensor_list
+            
+        return [input_img, target_img, mask, parametrization]
+
+
+
 
 
 def check_dataset(path_tuples):
