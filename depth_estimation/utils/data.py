@@ -150,198 +150,120 @@ import random
 from tqdm import tqdm # Para ver el progreso de carga en RAM
 
 class InputTargetDataset:
+    """Parameters:
+    - rgb_depth_priors_tuples: List of filepath tuples of form (rgb, depth, sparse priors)
+    - input_transform: Transform to apply to the input RGB image, returns torch Tensor
+    - target_transform: Transform to apply to the target depth image, returns torch Tensor
+    - all_transform: Transform to apply to both input, target and mask image...
+    - target_samples_transform: Transfrom to apply to both target and depth samples...
+    - max_priors: max number of priors to subsample
+    - shuffle: shuffle dataset"""
+
     def __init__(
         self,
         rgb_depth_priors_tuples,
-        train=False, # Añadimos este flag para saber si aplicar Jitter/Flips
+        input_transform,
+        target_transform,
+        all_transform=None,
+        target_samples_transform=None,
         max_priors=200,
-        device="cpu", # Preferiblemente "cpu" para la RAM, no satures la VRAM
+        shuffle=False,
     ) -> None:
 
-        self.train = train
-        self.device = device
+        self.path_tuples = rgb_depth_priors_tuples
+        self.input_transform = input_transform
+        self.target_transform = target_transform
+        self.all_transform = all_transform
+        self.target_samples_transform = target_samples_transform
         self.max_priors = max_priors
+
+        if shuffle:
+            random.shuffle(self.path_tuples)
+
+        # checking dataset for missing files
+        if not check_dataset(self.path_tuples):
+            print("WARNING, dataset has missing files!")
+
+        # --- CARGA DEL DATASET EN RAM ---
         self.cache = []
+        print(f"Iniciando carga de {len(self.path_tuples)} archivos en RAM. Esto puede tardar...")
 
-        print(f"Cargando dataset en RAM y pre-computando transformaciones estáticas...")
-        
-        # Iteramos con barra de progreso
-        for input_fn, target_fn, depth_samples_fn in tqdm(rgb_depth_priors_tuples, desc="Cacheando en RAM"):
-            
-            # --- 1. Leer imágenes ---
-            input_img = np.load(input_fn)
-            target_img = np.load(target_fn)
-
-            # --- 2. Pre-procesar Target y Máscara (Equivalente a FloatPILToTensor + ReplaceInvalid) ---
-            if target_img.ndim == 2:
-                target_img = target_img[np.newaxis, ...]
-            target_tensor = torch.from_numpy(target_img).float()
-            
-            mask = target_tensor.gt(0.0)
-            
-            # FILTRADO: Si no hay valores válidos, ignoramos este sample (evita recursividad en __getitem__)
-            if not mask.any():
-                continue
+        for input_fn, target_fn, depth_samples_fn in self.path_tuples:
+            try:
+                # 1. Cargamos el target primero para validarlo
+                target_img = np.load(target_fn)
                 
-            # ReplaceInvalid(value="max")
-            max_val = target_tensor[mask].max()
-            target_tensor[~mask] = max_val
+                # Transformación anticipada: Si el mapa de profundidad es todo 0, lo descartamos.
+                # Esto ahorra RAM y evita hacer chequeos recursivos en el __getitem__
+                if not (target_img > 0.0).any():
+                    continue
 
-            # --- 3. Leer y pre-calcular Priors (Ahorro masivo de tiempo) ---
-            depth_samples = read_features(depth_samples_fn, self.max_priors, device='cpu')
-            
-            # FILTRADO: Si no hay features, lo saltamos
-            if depth_samples is None:
+                # 2. Cargamos el input
+                input_img = np.load(input_fn)
+
+                # 3. Almacenamos en memoria conservando el formato puro de numpy
+                self.cache.append({
+                    'input_img': input_img,
+                    'target_img': target_img,
+                    'depth_samples_fn': depth_samples_fn # Dejamos el path para leerlo al vuelo
+                })
+            except Exception as e:
+                print(f"Error cargando los archivos: {input_fn} o {target_fn}. Excepción: {e}")
                 continue
 
-            parametrization = get_depth_prior_from_features(
-                features=depth_samples.unsqueeze(0),
-                height=240, # Asumo que estos valores son fijos según tu código original
-                width=320,
-            ).squeeze(0)
-
-            # --- 4. Pre-procesar Input (Equivalente parcial a IntPILToTensor) ---
-            # OJO: Lo guardamos como uint8 en RAM para no saturar los 30GB.
-            if input_img.ndim == 3:
-                input_img = input_img.transpose((2, 0, 1))
-            elif input_img.ndim == 2:
-                input_img = input_img[np.newaxis, ...]
-            input_tensor_uint8 = torch.from_numpy(input_img).to(torch.uint8)
-
-            # --- 5. Guardar en RAM ---
-            # Usa float16 para el target/parametrization si aún así te quedas sin RAM
-            self.cache.append({
-                'input': input_tensor_uint8,        # uint8
-                'target': target_tensor,            # float32 
-                'mask': mask,                       # bool
-                'parametrization': parametrization  # float32
-            })
-
-        print(f"Dataset cargado. Muestras válidas retenidas: {len(self.cache)}")
-
-        # --- Transformaciones Aleatorias (Sólo se inicializan, se usan en __getitem__) ---
-        if self.train:
-            import torchvision.transforms as T
-            self.color_jitter = T.ColorJitter(brightness=0.1, hue=0.05)
-            self.mutual_flip = MutualRandomHorizontalFlip()
-            self.mutual_factor = MutualRandomFactor(factor_range=(0.8, 1.2))
+        print(f"Carga completada. Muestras válidas retenidas en RAM: {len(self.cache)}")
 
     def __len__(self):
         return len(self.cache)
 
     def __getitem__(self, idx):
-        # 1. Recuperar directamente de la RAM
+        t_start = time.perf_counter()
+
+        # --- 1. Recuperar datos de la RAM ---
         data = self.cache[idx]
         
-        # 2. Mover a dispositivo (si aplica) y finalizar conversión de input
-        # Aquí es donde dividimos por 255.0 para pasar de uint8 a float [0,1]
-        input_img = data['input'].to(self.device).float().div(255.0)
-        target_img = data['target'].to(self.device)
-        mask = data['mask'].to(self.device)
-        parametrization = data['parametrization'].to(self.device)
+        # CRÍTICO: Usar .copy() para no modificar los arrays de la caché de RAM 
+        # cuando apliquemos transformaciones in-place como ReplaceInvalid
+        input_img = data['input_img'].copy()
+        target_img = data['target_img'].copy()
+        depth_samples_fn = data['depth_samples_fn']
 
-        # 3. Aplicar transformaciones aleatorias SI es entrenamiento
-        if self.train:
-            # Jitter solo al input
-            input_img = self.color_jitter(input_img)
+        # --- 2. apply input/target transforms ---
+        input_img = self.input_transform(input_img)
+        target_img, mask = self.target_transform(target_img)
 
-            # Target + prior transform
-            target_img, parametrization = self.mutual_factor([target_img, parametrization])
+        # La comprobación "if not mask.any(): return self[random_idx]" ya no es necesaria
+        # porque filtramos los inválidos en el __init__
 
-            # Mutual flips (afecta a todos)
-            tensor_list = [input_img, target_img, mask, parametrization]
-            tensor_list = self.mutual_flip(tensor_list)
-            return tensor_list
-            
-        return [input_img, target_img, mask, parametrization]
+        # --- 3. read sparse depth priors ---
+        depth_samples = read_features(depth_samples_fn, self.max_priors, device=target_img.device)
 
+        # --- 4. check if features has at least one entry ---
+        if depth_samples is None:
+            # Si da error en features, buscamos otro aleatorio
+            random_idx = np.random.randint(0, len(self))
+            return self[random_idx]
 
+        # --- 5. get dense parametrization from sparse priors ---
+        parametrization = get_depth_prior_from_features(
+            features=depth_samples.unsqueeze(0),
+            height=240,
+            width=320,
+        ).squeeze(0)
 
+        # --- 6. apply target + prior transform ---
+        if self.target_samples_transform is not None:
+            target_img, parametrization = self.target_samples_transform(
+                [target_img, parametrization]
+            )
 
-
-def check_dataset(path_tuples):
-        """Checks dataset for missing files."""
-        for tuple in path_tuples:
-            for f in tuple:
-                if not exists(f):
-                    print(f"Missing file: {f}.")
-                    return False
-
-        print(f"Checked {len(path_tuples)} tuples for existence, all ok.")
-
-        return True
-
-def read_features(path, max_priors, device="cpu"):
-        """Read sparse priors from file and store in torch tensor."""
-
-        # load samples (might be less than n_samples)
-        depth_samples_data = pd.read_csv(path).to_numpy()
-
-        # give warning when no features
-        if len(depth_samples_data) == 0:
-            print(f"WARNING: Features list {path} is empty, returning None!")
-            return None
-        else:
-            rand_idcs = np.random.permutation(len(depth_samples_data))[
-                : max_priors
-            ]
-            depth_samples = depth_samples_data[rand_idcs]  # select subset
-
-        # tensor from numpy
-        depth_samples = torch.from_numpy(depth_samples).to(device)
-
-        return depth_samples
-
-
-class InputDataset:
-    """Similar to InputTargetDataset above, but for inference only. If priors are not available, set `max_priors` to zero."""
-
-    def __init__(self, rgb_priors_tuples, image_transform, max_priors=200) -> None:
+        # --- 7. apply mutual transforms ---
+        tensor_list = [input_img, target_img, mask, parametrization]
+        if self.all_transform is not None:
+            tensor_list = self.all_transform(tensor_list)
         
-        self.path_tuples = rgb_priors_tuples
-        self.image_transform = image_transform
-        self.max_priors = max_priors
+        return tensor_list
 
-        if self.max_priors > 0:
-            print(f"Using priors (max {self.max_priors} per image).")
-            check_dataset(self.path_tuples)
-        else: 
-            image_fns = [[t[0]] for t in self.path_tuples]
-            print("Not using priors, using nullprior as placeholder.")
-            check_dataset(image_fns)
-
-    def __len__(self):
-        return len(self.path_tuples)
-    
-    def __getitem__(self, idx):
-
-        # get img filename
-        input_fn = self.path_tuples[idx][0]
-
-        # read img
-        input_img = Image.open(input_fn).resize((640, 480))
-
-        # apply image transforms to get tensor
-        input_img = self.image_transform(input_img)
-
-        if self.max_priors > 0:
-
-            # get keypoints filename
-            depth_samples_fn = self.path_tuples[idx][1]
-
-            # read sparse depth priors
-            depth_samples = read_features(depth_samples_fn, self.max_priors, device=input_img.device)
-            
-            # get dense parametrization from sparse priors
-            parametrization = get_depth_prior_from_features(
-                features=depth_samples.unsqueeze(0),  # add batch dimension
-                height=240,
-                width=320,
-            ).squeeze(0)
-
-            return [input_img, parametrization]
-        else:
-            return [input_img]
 
 
 class MutualRandomHorizontalFlip:

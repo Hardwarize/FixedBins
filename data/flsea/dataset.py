@@ -87,11 +87,17 @@ def get_flsea_dataset_old(
 def get_flsea_dataset(
     split="dataset_with_matched_features", train=False, shuffle=False, device="cpu"
 ):
+
     if train:
-        csv_files = ["./red_sea_features_paths_npy.csv"]
+        csv_files = [
+            "./red_sea_features_paths_npy.csv"
+        ]
     else:
-        csv_files = ["./canyons_features_paths_npy.csv"]
+        csv_files = [
+            "./canyons_features_paths_npy.csv"
+        ]
         
+    # filenames
     rgb_depth_priors_tuples = []
     for csv_file in csv_files:
         try:
@@ -100,16 +106,48 @@ def get_flsea_dataset(
         except FileNotFoundError:
             print(f"{csv_file} not found, skipping...")
 
-    # Barajar antes de instanciar si se desea
-    if shuffle:
-        random.shuffle(rgb_depth_priors_tuples)
+    # transforms
+    if train:
+        input_transform = transforms.Compose(
+            [
+                IntPILToTensor(type="uint8", device=device),
+                transforms.ColorJitter(brightness=0.1, hue=0.05),
+            ]
+        )
+        target_transform = transforms.Compose(
+            [
+                FloatPILToTensor(device=device),
+                ReplaceInvalid(value="max"),
+            ]
+        )
+        all_transform = transforms.Compose([MutualRandomHorizontalFlip()])
+        target_samples_transform = transforms.Compose(
+            [
+                MutualRandomFactor(factor_range=(0.8, 1.2)),
+            ]
+        )
 
-    # Instanciamos el dataset optimizado
+    else:
+        input_transform = transforms.Compose(
+            [IntPILToTensor(type="uint8", device=device)]
+        )
+        target_transform = transforms.Compose(
+            [
+                FloatPILToTensor(device=device),
+                ReplaceInvalid(value="max"),
+            ]
+        )
+        all_transform = None
+        target_samples_transform = None
+
     dataset = InputTargetDataset(
         rgb_depth_priors_tuples=rgb_depth_priors_tuples,
-        train=train,
+        input_transform=input_transform,
+        target_transform=target_transform,
+        all_transform=all_transform,
+        target_samples_transform=target_samples_transform,
         max_priors=200,
-        device=device
+        shuffle=shuffle,
     )
 
     return dataset
