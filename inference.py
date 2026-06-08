@@ -10,27 +10,26 @@ from torchvision.transforms import Resize
 from depth_estimation.model.model import UDFNet
 from depth_estimation.utils.visualization import gray_to_heatmap
 
-from data.example_dataset.dataset import get_example_dataset, get_example_dataset_inference
+from data.flsea.dataset import get_flsea_dataset
 
 
 ############################################################
 ###################### CONFIG ##############################
 ############################################################
 
-BATCH_SIZE = 6
+BATCH_SIZE = 24
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 MODEL_PATH = (
-    "data/saved_models/model_e11_udfnet_lr0.0001_bs6_lrd0.9_with_infguidance.pth"
+    "/workspaces/metric_depth_estimation_pipeline/depth_experiments/saved_models/2_uw_depth_as_is_relative_01__saved_models/model_e8_udfnet_lr0.0001_bs12_lrd0.9.pth"
 )
-DATASET = get_example_dataset_inference(priors=True)
+DATASET = get_flsea_dataset(
+     split="dataset_with_matched_features",
+     train=False,
+     shuffle=False,
+     device=DEVICE,
+)
 OUT_PATH = "data/out"
 SAVE = True
-
-# use this if priors are not available
-# MODEL_PATH = (
-#     "data/saved_models/model_e24_udfnet_lr0.0001_bs6_lrd0.9_nullpriors.pth"
-# )
-# DATASET = get_example_dataset_inference(priors=False)
 
 ############################################################
 ############################################################
@@ -62,7 +61,7 @@ def inference():
 
         # using priors from files or not
         if len(data) > 1:
-            prior = data[1].to(DEVICE)  # precomputed features and depth values
+            prior = data[3].to(DEVICE)  # precomputed features and depth values
         else: 
             prior = torch.zeros(BATCH_SIZE,2,240,320).to(DEVICE)  # if you dont have/want priors
 
