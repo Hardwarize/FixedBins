@@ -334,35 +334,26 @@ def validate(
         bin_centers = 0.5 * (bin_edges[:, :-1] + bin_edges[:, 1:])
 
         # individual losses
-        batch_loss_silog = LOSS_FUNCTIONS["SILog_Loss"](pred, y, mask)
-        batch_loss_chamfer = LOSS_FUNCTIONS["Chamfer_Loss"](y, bin_centers, mask)
-        batch_loss_l2 = LOSS_FUNCTIONS["L2_Loss"](pred, y, mask)
-        batch_loss_l1 = LOSS_FUNCTIONS["L1_Loss"](pred[mask], y[mask])  # , mask)
-        batch_loss_l2_log = LOSS_FUNCTIONS["L2_Loss"](
-            torch.log(pred), torch.log(y), mask
-        )
-        close_range = y[mask] < 5.0  # close range mask (less than 5m)
-        batch_loss_l2_close = LOSS_FUNCTIONS["L2_Loss"](
-            pred[mask][close_range], y[mask][close_range]
-        )
+        batch_loss_ssi_relative = LOSS_FUNCTIONS["SSI_ZScore_Loss"](pred, y, mask)
+        batch_loss_gradient_relative = LOSS_FUNCTIONS["Gradient_ZScore_Loss"](pred, y, mask)
+
+ 
 
         # objective (for reference)
-        batch_loss = (
-            batch_loss_silog * LOSS_WEIGHTS["w_SILog_Loss"]
-            + batch_loss_chamfer * LOSS_WEIGHTS["w_Chamfer_Loss"]
-            + batch_loss_l2 * LOSS_WEIGHTS["w_L2_Loss"]
-        )
+        batch_loss = (batch_loss_ssi_relative * LOSS_WEIGHTS["w_SSI_ZScore_Loss"]+ batch_loss_gradient_relative * LOSS_WEIGHTS["w_Gradient_ZScore_Loss"])
 
         # statistics for tensorboard visualization graphs
         batch_losses = np.array(
             [
                 batch_loss.item(),
-                batch_loss_silog.item(),
-                batch_loss_chamfer.item(),
-                batch_loss_l2.item(),
-                batch_loss_l1.item(),
-                batch_loss_l2_log.item(),
-                batch_loss_l2_close.item(),
+                batch_loss_ssi_relative.item(),
+                batch_loss_gradient_relative.item()
+                #batch_loss_silog.item(),
+                #batch_loss_chamfer.item(),
+                #batch_loss_l2.item(),
+                #batch_loss_l1.item(),
+                #batch_loss_l2_log.item(),
+                #batch_loss_l2_close.item(),
             ]
         )
         validation_losses += batch_losses
