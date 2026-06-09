@@ -26,7 +26,7 @@ MODEL_PATH = (
 DATASET = get_flsea_dataset(
      split="dataset_with_matched_features",
      train=False,
-     shuffle=True,
+     shuffle=False,
      device=DEVICE,
 )
 OUT_PATH = "data/out"
