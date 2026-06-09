@@ -2,6 +2,7 @@ import torch
 from torchvision.transforms.functional import hflip, vflip
 from PIL import Image
 import time
+import cv2
 
 import numpy as np
 
@@ -10,6 +11,50 @@ import random
 from os.path import exists
 
 from .depth_prior import get_depth_prior_from_features
+
+
+import torch
+
+def depth_to_relative(depth_map, depth_samples):
+    # --- Protect the inputs ---
+    # .clone() creates a safe copy, and .float() ensures it can hold 0.0 - 1.0 values
+    samples_out = depth_samples.clone().float()
+    
+    # 1. Create the validity mask (boolean tensor)
+    valid_mask = depth_map > 0
+    
+    # Extract only the valid pixels to find min and max
+    valid_pixels = depth_map[valid_mask]
+    
+    # Safety check: if the depth map is completely empty/invalid
+    if valid_pixels.numel() == 0:
+        return torch.zeros_like(depth_map, dtype=torch.float32), samples_out
+
+    # 2. Extract the exact min and max values
+    min_val = valid_pixels.min()
+    max_val = valid_pixels.max()
+    
+    # Prevent division by zero if the depth map is completely flat
+    depth_range = max_val - min_val
+    if depth_range == 0:
+        depth_range = 1.0
+        
+    # 3. Normalize the depth map
+    normalized_depth = torch.zeros_like(depth_map, dtype=torch.float32)
+    # Apply standard Min-Max formula only to valid pixels
+    normalized_depth[valid_mask] = (depth_map[valid_mask] - min_val) / depth_range
+    
+    # --- Translate the scale to Keypoints ---
+    
+    # 4. Create mask for valid keypoints
+    valid_kp_mask = samples_out[:, 2] > 0
+    
+    # 5. Apply the exact same Min-Max formula to the keypoints
+    samples_out[valid_kp_mask, 2] = (samples_out[valid_kp_mask, 2] - min_val) / depth_range
+
+    return normalized_depth, samples_out
+
+
 
 
 class InputTargetDataset:
@@ -110,6 +155,8 @@ class InputTargetDataset:
             return self[random_idx]  # recursion
         ## TIME_FEATURE:t11 = time.perf_counter()
         ## TIME_FEATURE: print(f"[Time] [Item: {idx}] 6. Feature validity check: {t11 - t10:.6f}s")
+
+        target_img, depth_samples = depth_to_relative(target_img, depth_samples)
 
         # --- 7. get dense parametrization from sparse priors ---
         ## TIME_FEATURE:t12 = time.perf_counter()

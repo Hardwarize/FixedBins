@@ -16,15 +16,6 @@ def get_flsea_dataset(
     split="dataset_with_matched_features", train=False, shuffle=False, device="cpu"
 ):
 
-    csv_files = [
-        "/teamspace/studios/this_studio/canyons_features_paths.csv",
-        "/teamspace/studios/this_studio/red_sea_features_paths.csv"
-    ]
-    csv_files = [
-        "/teamspace/studios/this_studio/canyons_features_paths_resized.csv",
-        "/teamspace/studios/this_studio/red_sea_features_paths_resized.csv"
-    ]
-
     if train:
         csv_files = [
             "/teamspace/studios/this_studio/red_sea_features_paths_npy.csv"
