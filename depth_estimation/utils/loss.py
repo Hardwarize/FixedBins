@@ -1,5 +1,88 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
+
+
+def relative_normalization(input, target, mask):
+
+    if input.ndim == 3: input = input.unsqueeze(1)
+    if target.ndim == 3: target = target.unsqueeze(1)
+
+    if mask is not None:
+        mask_float = mask.to(input.dtype)
+        if mask_float.shape != input.shape:
+            mask_float = mask_float.expand_as(input)
+    else:
+        mask_float = torch.ones_like(input)
+
+    if mask_float.sum() == 0:
+        return torch.tensor(0.0, device=input.device, dtype=input.dtype)
+
+    eps = 1e-8
+
+    # ==========================================
+    # FASE 1: Z-Score Normalization Loss
+    # ==========================================
+    N = mask_float.sum(dim=(1, 2, 3), keepdim=True)
+    N_safe = N.clamp(min=eps)
+
+    # 1. Medias
+    mean_p = (input * mask_float).sum(dim=(1, 2, 3), keepdim=True) / N_safe
+    mean_t = (target * mask_float).sum(dim=(1, 2, 3), keepdim=True) / N_safe
+
+    # 2. Desviaciones Estándar
+    std_p = torch.sqrt((((input - mean_p) ** 2) * mask_float).sum(dim=(1, 2, 3), keepdim=True) / N_safe + eps)
+    std_t = torch.sqrt((((target - mean_t) ** 2) * mask_float).sum(dim=(1, 2, 3), keepdim=True) / N_safe + eps)
+
+    # 3. Estandarizar
+    input_norm = (input - mean_p) / (std_p + eps)
+    target_norm = (target - mean_t) / (std_t + eps)
+
+    return input_norm, target_norm, mask_float, N_safe
+
+
+
+class RelativeSSILoss(nn.Module):
+    def __init__(self):
+        super(RelativeSSILoss, self).__init__()
+        self.name = 'RelativeSSILossDA3_ZScore'
+
+    def forward(self, input, target, mask=None):
+        input_norm, target_norm, mask_float, N_safe = relative_normalization(input, target, mask)
+        # 4. Error L1 Global
+        ssi_loss = (torch.abs(input_norm - target_norm) * mask_float).sum() / N_safe.sum()
+
+        return ssi_loss
+
+
+class RelativeGradientLoss(nn.Module):
+    def __init__(self):
+        super(RelativeGradientLoss, self).__init__()
+        self.name = 'RelativeGradientLossDA3_ZScore'
+
+    def forward(self, input, target, mask=None):
+        eps = 1e-8
+        input_norm, target_norm, mask_float, N_safe = relative_normalization(input, target, mask)
+        # ==========================================
+        # Phase 2: Gradient Matching Loss
+        # ==========================================
+        # Diferences on axis X (using normalized maps)
+        diff_x_pred = input_norm[:, :, :, :-1] - input_norm[:, :, :, 1:]
+        diff_x_target = target_norm[:, :, :, :-1] - target_norm[:, :, :, 1:]
+        
+        mask_x = mask_float[:, :, :, :-1] * mask_float[:, :, :, 1:]
+        grad_loss_x = (torch.abs(diff_x_pred - diff_x_target) * mask_x).sum() / (mask_x.sum() + eps)
+
+        # Diferences on axis Y (using normalized maps)
+        diff_y_pred = input_norm[:, :, :-1, :] - input_norm[:, :, 1:, :]
+        diff_y_target = target_norm[:, :, :-1, :] - target_norm[:, :, 1:, :]
+        
+        mask_y = mask_float[:, :, :-1, :] * mask_float[:, :, 1:, :]
+        grad_loss_y = (torch.abs(diff_y_pred - diff_y_target) * mask_y).sum() / (mask_y.sum() + eps)
+
+        grad_loss = grad_loss_x + grad_loss_y
+
+        return grad_loss
 
 
 class SILogLoss(nn.Module):

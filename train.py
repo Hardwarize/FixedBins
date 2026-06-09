@@ -13,6 +13,8 @@ from depth_estimation.utils.loss import (
     SILogLoss,
     RMSELoss,
     ChamferDistanceLoss,
+    RelativeSSILoss,
+    RelativeGradientLoss
 )
 from depth_estimation.utils.visualization import get_tensorboard_grids
 
@@ -31,6 +33,7 @@ LEARNING_RATE_DECAY = 0.90
 EPOCHS = 25
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
+"""
 LOSS_FUNCTIONS = {
     "SILog_Loss": SILogLoss(correction=0.85, scaling=10.0),
     "Chamfer_Loss": ChamferDistanceLoss(),
@@ -57,6 +60,25 @@ VALIDATION_LOSS_NAMES = [
     "validation_loss/L2 Log Loss (RMSE log)",
     "validation_loss/L2 Loss [d<5m] (RMSE)",
 ]
+"""
+
+LOSS_FUNCTIONS = {
+    "SSI_ZScore_Loss": RelativeSSILoss(),
+    "Gradient_ZScore_Loss": RelativeGradientLoss()
+}
+LOSS_WEIGHTS = {"w_SSI_ZScore_Loss": 0.7, "w_Gradient_ZScore_Loss": 0.3}
+
+
+TRAINING_LOSS_NAMES = [
+    "training_loss",
+    "training_loss/SSI_ZScore_Loss",
+    "training_loss/Gradient_ZScore_Loss"
+]
+VALIDATION_LOSS_NAMES = [
+    "validation_loss",
+    "validation_loss/SSI_ZScore_Loss",
+    "validation_loss/Gradient_ZScore_Loss"
+]
 
 # datasets
 TRAIN_DATASET = get_flsea_dataset(
@@ -65,14 +87,7 @@ TRAIN_DATASET = get_flsea_dataset(
      shuffle=True,
      device=DEVICE,
 )
-# VALIDATION_DATASET = get_flsea_dataset(
-#     split="test_with_matched_features",
-#     train=False,
-#     shuffle=True,
-#     device=DEVICE,
-# )
 
-#TRAIN_DATASET = get_example_dataset(train=True, shuffle=True, device=DEVICE)
 VALIDATION_DATASET = get_flsea_dataset(
      split="dataset_with_matched_features",
      train=False,
@@ -209,30 +224,23 @@ def train_epoch(
         print("Model inference time:", model_inference_end_time - model_inference_start_time)
 
         # individual losses
-        batch_loss_silog = LOSS_FUNCTIONS["SILog_Loss"](pred, y, mask)
-        batch_loss_chamfer = LOSS_FUNCTIONS["Chamfer_Loss"](y, bin_centers, mask)
-        batch_loss_l2 = LOSS_FUNCTIONS["L2_Loss"](pred, y, mask)
-        batch_loss_l1 = LOSS_FUNCTIONS["L1_Loss"](pred[mask], y[mask])  # , mask)
-        batch_loss_l2_log = LOSS_FUNCTIONS["L2_Loss"](
-            torch.log(pred), torch.log(y), mask
-        )
-        close_range = y[mask] < 5.0  # close range mask (less than 5m)
-        batch_loss_l2_close = LOSS_FUNCTIONS["L2_Loss"](
-            pred[mask][close_range], y[mask][close_range]
-        )
+        #batch_loss_silog = LOSS_FUNCTIONS["SILog_Loss"](pred, y, mask)
+        #batch_loss_chamfer = LOSS_FUNCTIONS["Chamfer_Loss"](y, bin_centers, mask)
+        #batch_loss_l2 = LOSS_FUNCTIONS["L2_Loss"](pred, y, mask)
+        #batch_loss_l1 = LOSS_FUNCTIONS["L1_Loss"](pred[mask], y[mask])  # , mask)
+        #batch_loss_l2_log = LOSS_FUNCTIONS["L2_Loss"](torch.log(pred), torch.log(y), mask)
+        #close_range = y[mask] < 5.0  # close range mask (less than 5m)
+        #batch_loss_l2_close = LOSS_FUNCTIONS["L2_Loss"](pred[mask][close_range], y[mask][close_range])
+        batch_loss_ssi_relative = LOSS_FUNCTIONS["SSI_ZScore_Loss"](pred, y, mask)
+        batch_loss_gradient_relative = LOSS_FUNCTIONS["Gradient_ZScore_Loss"](pred, y, mask)
 
         # guidance signal for points outside of mask (usually points at infinity)
-        batch_loss_silog = batch_loss_silog + 0.02 * LOSS_FUNCTIONS["SILog_Loss"](
-            pred, y, ~mask
-        )
-        batch_loss_l2 = batch_loss_l2 + 0.02 * LOSS_FUNCTIONS["L2_Loss"](pred, y, ~mask)
+        #batch_loss_silog = batch_loss_silog + 0.02 * LOSS_FUNCTIONS["SILog_Loss"](pred, y, ~mask)
+        #batch_loss_l2 = batch_loss_l2 + 0.02 * LOSS_FUNCTIONS["L2_Loss"](pred, y, ~mask)
 
         # learning objective loss
-        batch_loss = (
-            batch_loss_silog * LOSS_WEIGHTS["w_SILog_Loss"]
-            + batch_loss_chamfer * LOSS_WEIGHTS["w_Chamfer_Loss"]
-            + batch_loss_l2 * LOSS_WEIGHTS["w_L2_Loss"]
-        )
+        #batch_loss = (batch_loss_silog * LOSS_WEIGHTS["w_SILog_Loss"]+ batch_loss_chamfer * LOSS_WEIGHTS["w_Chamfer_Loss"]+ batch_loss_l2 * LOSS_WEIGHTS["w_L2_Loss"])
+        batch_loss = (batch_loss_ssi_relative * LOSS_WEIGHTS["w_SSI_ZScore_Loss"]+ batch_loss_gradient_relative * LOSS_WEIGHTS["w_Gradient_ZScore_Loss"])
 
         model_optim_start_time = time.time()
 
@@ -248,12 +256,14 @@ def train_epoch(
         batch_losses = np.array(
             [
                 batch_loss.item(),
-                batch_loss_silog.item(),
-                batch_loss_chamfer.item(),
-                batch_loss_l2.item(),
-                batch_loss_l1.item(),
-                batch_loss_l2_log.item(),
-                batch_loss_l2_close.item(),
+                batch_loss_ssi_relative.item(),
+                batch_loss_gradient_relative.item()
+                #batch_loss_silog.item(),
+                #batch_loss_chamfer.item(),
+                #batch_loss_l2.item(),
+                #batch_loss_l1.item(),
+                #batch_loss_l2_log.item(),
+                #batch_loss_l2_close.item(),
             ]
         )
         training_losses += batch_losses
