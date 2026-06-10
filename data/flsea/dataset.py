@@ -25,6 +25,9 @@ def get_flsea_dataset(
         csv_files = [
             "/data/npy_data/my_folders/canyons_features_paths_npy.csv"
         ]
+        csv_files = [
+            "/data/npy_data/my_folders/oceanpactbox_features_paths_npy.csv"
+        ]
     # filenames
     rgb_depth_priors_tuples = []
     for csv_file in csv_files:
