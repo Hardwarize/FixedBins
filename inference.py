@@ -20,7 +20,7 @@ from data.flsea.dataset import get_flsea_dataset
 BATCH_SIZE = 24
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 MODEL_PATH = (
-    "/workspaces/metric_depth_estimation_pipeline/depth_experiments/model_e5_udfnet_lr0.0001_bs12_lrd0.9.pth"
+    "/workspaces/metric_depth_estimation_pipeline/depth_experiments/saved_models/4_uw_depth_null_priors_relative_01_relativedepthloss__saved_models/model_e5_udfnet_lr0.0001_bs12_lrd0.9.pth"
 )
 DATASET = get_flsea_dataset(
      split="dataset_with_matched_features",
