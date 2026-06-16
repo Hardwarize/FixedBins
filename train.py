@@ -208,10 +208,11 @@ def train_epoch(
         X = data[0].to(DEVICE)  # RGB image
         y = data[1].to(DEVICE)  # depth image
         mask = data[2].to(DEVICE)  # mask for valid values
-        prior = data[3].to(DEVICE)  # precomputed features and depth values
+        #prior = data[3].to(DEVICE)  # precomputed features and depth values
 
         # nullprior, for training without any priors
-        prior[:, :, :, :] = 0.0
+        #prior[:, :, :, :] = 0.0
+        prior = torch.zeros_like(mask, dtype=torch.float32).to(DEVICE)  # nullprior
 
 
         model_inference_start_time = time.time()

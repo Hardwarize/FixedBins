@@ -18,7 +18,7 @@ import torch
 def depth_to_relative(depth_map, depth_samples):
     # --- Protect the inputs ---
     # .clone() creates a safe copy, and .float() ensures it can hold 0.0 - 1.0 values
-    samples_out = depth_samples.clone().float()
+    #samples_out = depth_samples.clone().float()
     
     # 1. Create the validity mask (boolean tensor)
     valid_mask = depth_map > 0
@@ -28,7 +28,7 @@ def depth_to_relative(depth_map, depth_samples):
     
     # Safety check: if the depth map is completely empty/invalid
     if valid_pixels.numel() == 0:
-        return torch.zeros_like(depth_map, dtype=torch.float32), samples_out
+        return torch.zeros_like(depth_map, dtype=torch.float32), None
 
     # 2. Extract the exact min and max values
     min_val = valid_pixels.min()
@@ -47,12 +47,12 @@ def depth_to_relative(depth_map, depth_samples):
     # --- Translate the scale to Keypoints ---
     
     # 4. Create mask for valid keypoints
-    valid_kp_mask = samples_out[:, 2] > 0
+    #valid_kp_mask = samples_out[:, 2] > 0
     
     # 5. Apply the exact same Min-Max formula to the keypoints
-    samples_out[valid_kp_mask, 2] = (samples_out[valid_kp_mask, 2] - min_val) / depth_range
+    #samples_out[valid_kp_mask, 2] = (samples_out[valid_kp_mask, 2] - min_val) / depth_range
 
-    return normalized_depth, samples_out
+    return normalized_depth, None
 
 
 
@@ -143,16 +143,17 @@ class InputTargetDataset:
 
         # --- 5. read sparse depth priors ---
         ## TIME_FEATURE:t8 = time.perf_counter()
-        depth_samples = read_features(depth_samples_fn, self.max_priors, device=target_img.device)
+        #depth_samples = read_features(depth_samples_fn, self.max_priors, device=target_img.device)
+        depth_samples = None
         ## TIME_FEATURE:t9 = time.perf_counter()
         ## TIME_FEATURE:print(f"[Time] [Item: {idx}] 5. Read sparse depth priors: {t9 - t8:.6f}s")
 
         # --- 6. check if features has at least one entry ---
         ## TIME_FEATURE:t10 = time.perf_counter()
-        if depth_samples is None:
-            print("Depth priors is None, trying other image as substitution ...")
-            random_idx = np.random.randint(0, len(self))
-            return self[random_idx]  # recursion
+        #if depth_samples is None:
+        #    print("Depth priors is None, trying other image as substitution ...")
+        #    random_idx = np.random.randint(0, len(self))
+        #    return self[random_idx]  # recursion
         ## TIME_FEATURE:t11 = time.perf_counter()
         ## TIME_FEATURE: print(f"[Time] [Item: {idx}] 6. Feature validity check: {t11 - t10:.6f}s")
 
@@ -160,26 +161,28 @@ class InputTargetDataset:
 
         # --- 7. get dense parametrization from sparse priors ---
         ## TIME_FEATURE:t12 = time.perf_counter()
-        parametrization = get_depth_prior_from_features(
-            features=depth_samples.unsqueeze(0),  # add batch dimension
-            height=240,
-            width=320,
-        ).squeeze(0)
+        #parametrization = get_depth_prior_from_features(
+        #    features=depth_samples.unsqueeze(0),  # add batch dimension
+        #    height=240,
+        #    width=320,
+        #).squeeze(0)
         ## TIME_FEATURE:t13 = time.perf_counter()
         ## TIME_FEATURE:print(f"[Time] [Item: {idx}] 7. Dense parametrization: {t13 - t12:.6f}s")
+        parametrization = None
 
         # --- 8. apply target + prior transform ---
         ## TIME_FEATURE:t14 = time.perf_counter()
+        print(target_img)
         if self.target_samples_transform is not None:
-            target_img, parametrization = self.target_samples_transform(
-                [target_img, parametrization]
+            target_img = self.target_samples_transform(
+                target_img
             )
         ## TIME_FEATURE:t15 = time.perf_counter()
         ## TIME_FEATURE:print(f"[Time] [Item: {idx}] 8. Target + prior transform: {t15 - t14:.6f}s")
 
         # --- 9. apply mutual transforms ---
         ## TIME_FEATURE:t16 = time.perf_counter()
-        tensor_list = [input_img, target_img, mask, parametrization]
+        tensor_list = [input_img, target_img, mask]
         if self.all_transform is not None:
             tensor_list = self.all_transform(tensor_list)
         ## TIME_FEATURE:t17 = time.perf_counter()

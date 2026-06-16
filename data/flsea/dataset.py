@@ -18,19 +18,20 @@ def get_flsea_dataset(
 
     if train:
         csv_files = [
-            "/teamspace/studios/this_studio/red_sea_features_paths_npy.csv"
+            "/data/npy_data/my_folders/red_sea_features_paths_npy.csv",
+            "/data/npy_data/my_folders/oceanpactbox_features_paths_npy.csv"
         ]
     
     else:
         csv_files = [
-            "/teamspace/studios/this_studio/canyons_features_paths_npy.csv"
+            "/data/npy_data/my_folders/canyons_features_paths_npy.csv"
         ]
     # filenames
     rgb_depth_priors_tuples = []
     for csv_file in csv_files:
         try:
             lines = csv.reader(open(csv_file).read().splitlines())
-            rgb_depth_priors_tuples += [i for i in lines]
+            rgb_depth_priors_tuples += [[ j.replace('/teamspace/studios/this_studio/', '/data/npy_data/my_folders/') for j in i] for i in lines]
         except FileNotFoundError:
             print(f"{csv_file} not found, skipping...")
 
