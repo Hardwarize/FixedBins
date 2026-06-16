@@ -212,7 +212,7 @@ def train_epoch(
 
         # nullprior, for training without any priors
         #prior[:, :, :, :] = 0.0
-        prior = torch.zeros_like(mask, dtype=torch.float32).to(DEVICE)  # nullprior
+        prior = torch.zeros(BATCH_SIZE, 2, 240, 320, dtype=torch.float32).to(DEVICE)  # nullprior
 
 
         model_inference_start_time = time.time()
